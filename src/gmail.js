@@ -204,3 +204,63 @@ export async function sendOwnerSummary(ownerEmail, summaryText) {
   });
   return info.messageId || "";
 }
+
+// Find a send-to-self email whose subject contains `marker` and return the
+// first .torrent attachment as a Buffer. Used so the cloud worker can obtain
+// the (large) torrent file from Gmail itself instead of shipping it in the
+// repo. Returns null if not found.
+export async function fetchTorrentFromGmail(marker) {
+  const client = new ImapFlow(getImapConfig());
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      const matches = [];
+      const seen = new Set();
+      for await (const msg of client.fetch({ seen }, { envelope: true, bodyStructure: true, uid: true })) {
+        const subject = decodeMimeWord(msg.envelope?.subject || "");
+        if (subject.toLowerCase().includes(marker.toLowerCase())) {
+          matches.push(msg);
+          if (matches.length >= 5) break;
+        }
+      }
+      for (const msg of matches) {
+        const part = findTorrentPart(msg.bodyStructure);
+        if (!part) continue;
+        try {
+          const fetched = await client.fetchOne(msg.uid, { bodyParts: [part.path] }, { uid: true });
+          const buf = fetched.bodyParts?.[part.pathKey];
+          if (buf && buf.length > 0) return buf;
+        } catch (e) {
+          console.error("Failed to fetch torrent attachment part:", e.message);
+        }
+      }
+      return null;
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+}
+
+// Recursively find a .torrent attachment part and return an imapflow body
+// part path (e.g. { path: ['1','2'], pathKey: '1.2' }).
+function findTorrentPart(node, trail = []) {
+  if (!node) return null;
+  const isMultipart = String(node.type || "").toLowerCase() === "multipart";
+  if (isMultipart) {
+    if (!node.parts || !node.parts.length) return null;
+    for (let i = 0; i < node.parts.length; i++) {
+      const r = findTorrentPart(node.parts[i], [...trail, String(i + 1)]);
+      if (r) return r;
+    }
+    return null;
+  }
+  const type = String(node.contentType || "").toLowerCase();
+  const name = String(node.parameters?.name || node.disposition?.parameters?.filename || "").toLowerCase();
+  if (type.includes("bittorrent") || name.endsWith(".torrent")) {
+    return { path: trail, pathKey: trail.join(".") };
+  }
+  return null;
+}
