@@ -1,0 +1,26 @@
+name: sims4-order-mailer
+services:
+  - name: mailer
+    type: worker
+    source:
+      type: docker
+      dockerfile: Dockerfile
+      context: .
+    env:
+      - key: GMAIL_ADDRESS
+      - key: GMAIL_APP_PASSWORD
+      - key: OWNER_EMAIL
+      - key: DISABLE_DASHBOARD
+        value: "true"
+      - key: ALLOW_SEND
+        value: "true"
+      - key: POLL_INTERVAL_MS
+        value: "120000"
+      - key: BANNER_PATH
+        value: /app/assets/email_banner.gif
+      - key: TORRENT_PATH
+        value: /app/assets/torrent.torrent
+      - key: TORRENT_FILENAME
+        value: The Sims 4 Ultimate Collection v1.125.59.1030.torrent
+      - key: DB_PATH
+        value: /app/data/mailer.db
