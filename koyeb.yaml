@@ -22,5 +22,7 @@ services:
         value: /app/assets/torrent.torrent
       - key: TORRENT_FILENAME
         value: The Sims 4 Ultimate Collection v1.125.59.1030.torrent
+      - key: TORRENT_MARKER
+        value: SIMS4 TORRENT
       - key: DB_PATH
         value: /app/data/mailer.db
