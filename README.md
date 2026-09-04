@@ -37,6 +37,18 @@ Monitoring is done via the **daily summary email** to your own Gmail inbox (deli
 
 This app password can only read/send email. It cannot change account settings.
 
+## 2. Send the torrent to yourself once
+
+The torrent file is a 6 MB binary that is too large to comfortably push through GitHub, so the cloud server pulls it **from your own Gmail inbox** at startup:
+
+1. In Gmail web (logged in as your shop account), click **Compose**.
+2. Send it **to yourself** (`ayoub.errahhaoui@gmail.com`).
+3. Subject must contain: **`SIMS4 TORRENT`**.
+4. Attach the file `TS4.v1.125.59.1030.ALL.DLC.zip (1).torrent`.
+5. Send.
+
+Every time the cloud worker boots it will fetch the first matching `.torrent` attachment and use it as the delivery attachment. No server-side storage needed.
+
 ## 2. Test locally on this PC
 
 ```bash
@@ -86,6 +98,7 @@ Because it's a Koyeb *worker* with no exposed port, it is completely unreachable
 | `SUMMARY_INTERVAL_MS` | `43200000` | Daily summary interval (12h) |
 | `BANNER_PATH` / `TORRENT_PATH` | `./assets/…` | Asset file locations |
 | `TORRENT_FILENAME` | real name | Attachment filename in the email |
+| `TORRENT_MARKER` | `SIMS4 TORRENT` | Subject marker for the send-to-self torrent email |
 | `PORT` | `3000` | Local dashboard port |
 | `DB_PATH` | `./data/mailer.db` | SQLite file location |
 
