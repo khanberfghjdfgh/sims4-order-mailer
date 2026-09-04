@@ -1,8 +1,9 @@
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { loadEnv } from "./loadenv.js";
 import { initDb, logEvent, markSending, markSent, markFailed, isDuplicateBySubject, getSummaryCounts, getRecentFailures } from "./db.js";
-import { searchOrders, sendDeliveryEmail, sendOwnerSummary } from "./gmail.js";
+import { searchOrders, sendDeliveryEmail, sendOwnerSummary, fetchTorrentFromGmail } from "./gmail.js";
 import {
   isOrderConfirmation,
   isSimsText,
@@ -25,12 +26,37 @@ const ALLOW_SEND = String(process.env.ALLOW_SEND || "true").toLowerCase() === "t
 const DISABLE_DASHBOARD = String(process.env.DISABLE_DASHBOARD || "false").toLowerCase() === "true";
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || process.env.GMAIL_ADDRESS || "").trim();
 const SUMMARY_INTERVAL_MS = Math.max(6 * 60 * 60 * 1000, parseInt(process.env.SUMMARY_INTERVAL_MS || String(12 * 60 * 60 * 1000), 10));
+const TORRENT_MARKER = process.env.TORRENT_MARKER || "SIMS4 TORRENT";
 
 let db;
 let lastSummaryAt = Date.now();
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// Cloud instances have an ephemeral disk: assets checked out of git only
+// contain the banner. The torrent (too big to push on a flaky connection) is
+// stored as an email attachment sent to the owner's own Gmail account and
+// pulled down here at startup.
+async function ensureTorrentFile() {
+  if (fs.existsSync(TORRENT_PATH)) {
+    return;
+  }
+  if (!process.env.GMAIL_ADDRESS || !process.env.GMAIL_APP_PASSWORD) return;
+  console.log(`Torrent file missing at ${TORRENT_PATH}. Fetching from Gmail (subject marker: "${TORRENT_MARKER}")...`);
+  try {
+    const buf = await fetchTorrentFromGmail(TORRENT_MARKER);
+    if (!buf || buf.length === 0) {
+      console.error("Torrent not found in Gmail. Send yourself an email with subject containing '" + TORRENT_MARKER + "' and the .torrent attached.");
+      return;
+    }
+    fs.mkdirSync(path.dirname(TORRENT_PATH), { recursive: true });
+    fs.writeFileSync(TORRENT_PATH, buf);
+    console.log(`Torrent stored (${buf.length} bytes).`);
+  } catch (e) {
+    console.error("Failed to fetch torrent from Gmail:", e.message);
+  }
 }
 
 async function processOrder(item) {
@@ -238,6 +264,7 @@ async function main() {
   console.log("");
 
   db = await initDb();
+  await ensureTorrentFile();
 
   startDashboard();
   pollLoop().catch((e) => {
