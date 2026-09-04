@@ -3,3 +3,4 @@ data/
 .env
 *.db
 *.db-*
+assets/torrent.torrent
